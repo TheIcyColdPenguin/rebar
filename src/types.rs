@@ -23,6 +23,7 @@ pub(crate) enum HttpParseError {
 
     Other(String),
 }
+
 #[derive(Debug, PartialEq)]
 pub enum HttpVersion {
     Http1_1,
