@@ -23,9 +23,15 @@ pub(crate) enum HttpParseError {
 
     Other(String),
 }
+#[derive(Debug, PartialEq)]
+pub enum HttpVersion {
+    Http1_1,
+    Http2_0,
+}
 
 #[derive(Debug, PartialEq)]
 pub struct Request {
     pub method: Method,
+    pub http_version: HttpVersion,
     pub path: String,
 }
