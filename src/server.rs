@@ -40,8 +40,6 @@ where
         let handler = self.handler.clone();
         thread::spawn(move || match parse(&mut stream) {
             Ok(req) => {
-                // temporary setup,
-                // TODO: use closures
                 let mut res = create_response(stream, &req);
 
                 let handler = handler.lock().unwrap();
