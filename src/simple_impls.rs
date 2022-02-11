@@ -1,6 +1,6 @@
 use crate::types::{
     HeaderMethods, Headers, HttpResponseError, HttpStatusCode, HttpVersion, LogError, Method,
-    Request,
+    NormalizePath, Request,
 };
 
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -101,6 +101,8 @@ impl Default for Request {
         Request {
             method: Method::Get,
             path: "/".into(),
+            query: None,
+            fragment: None,
             http_version: HttpVersion::Http1_1,
         }
     }
@@ -112,6 +114,46 @@ impl<T> LogError for Result<T, HttpResponseError> {
             Ok(_) => {}
             Err(err) => println!("Error {:?}", err),
         }
+    }
+}
+
+impl NormalizePath for String {
+    fn normalize(&self) -> (String, Option<String>, Option<String>) {
+        fn fix_path(path: &str) -> String {
+            if !path.ends_with("/") {
+                path.to_owned() + "/"
+            } else {
+                path.to_owned()
+            }
+        }
+
+        let mut iter = if self.contains('?') {
+            self.split('?')
+        } else if self.contains('#') {
+            self.split('#')
+        } else {
+            return (fix_path(self), None, None);
+        };
+
+        let path = match iter.next() {
+            Some(s) => fix_path(s),
+            None => "/".to_owned(),
+        };
+
+        let query = match self.split('?').skip(1).next() {
+            Some(s) => match s.split('#').next() {
+                Some(s) if s.trim() != "" => Some(s.trim().to_owned()),
+                _ => None,
+            },
+            None => None,
+        };
+
+        let fragment = match self.split('#').skip(1).collect::<String>() {
+            s if s.trim() != "" => Some(s.trim().to_owned()),
+            _ => None,
+        };
+
+        (path, query, fragment)
     }
 }
 

@@ -47,6 +47,8 @@ pub struct Request {
     pub method: Method,
     pub http_version: HttpVersion,
     pub path: String,
+    pub query: Option<String>,
+    pub fragment: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -129,4 +131,8 @@ where
     fn get_header(&self, name: T) -> Option<&String>;
     fn set_header(&mut self, name: T, value: T) -> &mut Self;
     fn remove_header(&mut self, name: T) -> &mut Self;
+}
+
+pub(crate) trait NormalizePath {
+    fn normalize(&self) -> (String, Option<String>, Option<String>);
 }

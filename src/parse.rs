@@ -1,7 +1,7 @@
+use crate::types::{HttpParseError, HttpVersion, Method, NormalizePath, Request};
+
 use std::io::Read;
 use std::net::TcpStream;
-
-use crate::types::{HttpParseError, HttpVersion, Method, Request};
 
 pub(crate) fn parse(stream: &mut TcpStream) -> Result<Request, HttpParseError> {
     let mut buf = [0u8; 4096];
@@ -17,7 +17,7 @@ fn internal_parse(req: String) -> Result<Request, HttpParseError> {
     let mut strings = req.split("\r\n").next().unwrap().split(" ");
 
     let method = get_method(strings.next())?;
-    let path = get_path(strings.next())?;
+    let (path, query, fragment) = get_path(strings.next())?;
     let http_version = get_http_version(strings.next())?;
 
     // validate_crlf; adjust tests too
@@ -25,6 +25,8 @@ fn internal_parse(req: String) -> Result<Request, HttpParseError> {
     Ok(Request {
         method,
         path,
+        query,
+        fragment,
         http_version,
     })
 }
@@ -37,13 +39,13 @@ fn get_http_version(version: Option<&str>) -> Result<HttpVersion, HttpParseError
     }
 }
 
-fn get_path(req: Option<&str>) -> Result<String, HttpParseError> {
+fn get_path(req: Option<&str>) -> Result<(String, Option<String>, Option<String>), HttpParseError> {
     let string = req.ok_or(HttpParseError::InvalidPath)?.to_owned();
 
     if string.len() == 0 {
         Err(HttpParseError::InvalidPath)
     } else {
-        Ok(string)
+        Ok(string.normalize())
     }
 }
 
@@ -87,7 +89,34 @@ mod tests {
         assert_eq!(get_path(None), Err(HttpParseError::InvalidPath));
         assert_eq!(get_path(Some("")), Err(HttpParseError::InvalidPath));
 
-        assert_eq!(get_path(Some("/a/path")), Ok("/a/path".to_owned()));
+        assert_eq!(
+            get_path(Some("/a/path/")),
+            Ok(("/a/path/".to_owned(), None, None))
+        );
+
+        assert_eq!(
+            get_path(Some("/a/path")),
+            Ok(("/a/path/".to_owned(), None, None))
+        );
+
+        assert_eq!(
+            get_path(Some("/a/path#hmm")),
+            Ok(("/a/path/".to_owned(), None, Some("hmm".to_owned())))
+        );
+
+        assert_eq!(
+            get_path(Some("/a/path?hmm=ok#hmm")),
+            Ok((
+                "/a/path/".to_owned(),
+                Some("hmm=ok".to_owned()),
+                Some("hmm".to_owned())
+            ))
+        );
+
+        assert_eq!(
+            get_path(Some("/a/path?hmm=ok")),
+            Ok(("/a/path/".to_owned(), Some("hmm=ok".to_owned()), None))
+        );
     }
 
     #[test]
@@ -122,9 +151,22 @@ mod tests {
             internal_parse("GET /path HTTP/1.1".to_owned()),
             Ok(Request {
                 method: Method::Get,
-                path: "/path".to_owned(),
+                path: "/path/".to_owned(),
+                query: None,
+                fragment: None,
                 http_version: HttpVersion::Http1_1
             })
-        )
+        );
+
+        assert_eq!(
+            internal_parse("GET /path?ok=1 HTTP/1.1".to_owned()),
+            Ok(Request {
+                method: Method::Get,
+                path: "/path/".to_owned(),
+                query: Some("ok=1".to_owned()),
+                fragment: None,
+                http_version: HttpVersion::Http1_1
+            })
+        );
     }
 }
