@@ -1,8 +1,14 @@
 use std::collections::HashMap;
+use std::marker::Send;
 use std::net::{TcpListener, TcpStream};
+use std::sync::{Arc, Mutex};
 
-pub struct Server {
+pub struct Server<F>
+where
+    F: Fn(&Request, &mut Response) -> Result<(), HttpStatusCode> + Send + 'static,
+{
     pub(crate) listener: TcpListener,
+    pub(crate) handler: Arc<Mutex<Option<F>>>,
 }
 
 #[derive(Debug, PartialEq)]

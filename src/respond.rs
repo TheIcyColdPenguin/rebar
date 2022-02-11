@@ -26,7 +26,7 @@ impl Response {
             .map_err(|err| to_http_response_error(err))
     }
 
-    pub fn send(mut self) -> Result<HttpStatusCode, HttpResponseError> {
+    pub(crate) fn send(mut self) -> Result<HttpStatusCode, HttpResponseError> {
         self.write_head()?;
         self.write_body()?;
 
