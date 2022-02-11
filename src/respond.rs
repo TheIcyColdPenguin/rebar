@@ -8,7 +8,10 @@ fn to_http_response_error(err: std::io::Error) -> HttpResponseError {
 
 impl Response {
     fn write_head(&mut self) -> Result<(), HttpResponseError> {
-        let head = format!("{} {}\r\n\r\n", self.http_version, self.status);
+        let head = format!(
+            "{} {}\r\n{}\r\n",
+            self.http_version, self.status, self.headers
+        );
 
         self.stream
             .write(head.as_bytes())

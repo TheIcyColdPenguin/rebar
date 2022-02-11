@@ -46,10 +46,11 @@ pub struct Request {
 #[derive(Debug, PartialEq, Clone)]
 pub enum HttpStatusCode {
     Code200,
+    Code400,
     // TODO: add the rest
 }
 
-pub type Headers = HashMap<String, String>;
+pub struct Headers(pub HashMap<String, String>);
 
 pub struct Response {
     pub(crate) stream: TcpStream,
@@ -62,4 +63,13 @@ pub struct Response {
 
 pub(crate) trait LogError {
     fn log_error(&self);
+}
+
+pub trait HeaderMethods<T>
+where
+    T: Into<String>,
+{
+    fn get_header(&self, name: T) -> Option<&String>;
+    fn set_header(&mut self, name: T, value: T) -> &mut Self;
+    fn remove_header(&mut self, name: T) -> &mut Self;
 }

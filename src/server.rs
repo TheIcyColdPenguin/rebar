@@ -1,5 +1,5 @@
 use crate::parse::parse;
-use crate::types::{HttpStatusCode, LogError, Request, Response, Server};
+use crate::types::{HeaderMethods, Headers, HttpStatusCode, LogError, Request, Response, Server};
 
 use std::collections::HashMap;
 use std::net::{TcpListener, TcpStream};
@@ -19,9 +19,14 @@ impl Server {
                 // TODO: use closures
                 let mut response = Server::create_response(stream, &req);
                 response.body = "ok".into();
+                response.headers.set_header("Server", "Rebar");
                 response.send().log_error();
             }
-            Err(err) => println!("Error: {:?}", err),
+            Err(_) => {
+                let mut response = Server::create_response(stream, &Default::default());
+                response.status = HttpStatusCode::Code400;
+                response.send().log_error();
+            }
         });
     }
 
@@ -42,12 +47,16 @@ impl Server {
     }
 
     fn create_response(stream: TcpStream, req: &Request) -> Response {
+        let mut headers = Headers(HashMap::new());
+
+        headers.set_header("Content-Type", "text/html; charset=utf-8");
+
         Response {
             stream: stream,
 
+            headers,
             status: HttpStatusCode::Code200,
             http_version: req.http_version.clone(),
-            headers: HashMap::new(),
             body: vec![],
         }
     }
@@ -56,6 +65,9 @@ impl Server {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use http::header::{CONTENT_TYPE, SERVER};
+
     const ADDRESS: &str = "localhost:3004";
 
     #[test]
@@ -64,7 +76,14 @@ mod tests {
             Server::new(ADDRESS).listen_once();
         });
 
-        reqwest::blocking::get(format!("http://{}/ok", ADDRESS)).unwrap();
+        let response = reqwest::blocking::get(format!("http://{}/ok", ADDRESS)).unwrap();
+        let headers = response.headers();
+        assert!(headers.contains_key(CONTENT_TYPE));
+        assert!(headers.contains_key(SERVER));
+        assert_eq!(headers[CONTENT_TYPE], "text/html; charset=utf-8");
+        assert_eq!(headers[SERVER], "Rebar");
+
+        assert_eq!(response.text().unwrap(), "ok".to_owned());
 
         handle.join().unwrap();
     }
