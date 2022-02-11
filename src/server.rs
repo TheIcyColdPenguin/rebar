@@ -1,9 +1,9 @@
-use std::io::Write;
+use crate::parse::parse;
+use crate::types::{HttpStatusCode, LogError, Request, Response, Server};
+
+use std::collections::HashMap;
 use std::net::{TcpListener, TcpStream};
 use std::thread;
-
-use crate::parse::parse;
-use crate::types::Server;
 
 impl Server {
     pub fn new(on: &str) -> Server {
@@ -14,12 +14,12 @@ impl Server {
 
     fn handle_connection(mut stream: TcpStream) {
         thread::spawn(move || match parse(&mut stream) {
-            Ok(_) => {
+            Ok(req) => {
                 // temporary setup,
-                // TODO: create and use a Response struct
-                stream
-                    .write(b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\nok")
-                    .unwrap();
+                // TODO: use closures
+                let mut response = Server::create_response(stream, &req);
+                response.body = "ok".into();
+                response.send().log_error();
             }
             Err(err) => println!("Error: {:?}", err),
         });
@@ -40,6 +40,17 @@ impl Server {
             }
         }
     }
+
+    fn create_response(stream: TcpStream, req: &Request) -> Response {
+        Response {
+            stream: stream,
+
+            status: HttpStatusCode::Code200,
+            http_version: req.http_version.clone(),
+            headers: HashMap::new(),
+            body: vec![],
+        }
+    }
 }
 
 #[cfg(test)]
@@ -48,7 +59,7 @@ mod tests {
     const ADDRESS: &str = "localhost:3004";
 
     #[test]
-    fn it_runs_server() {
+    fn it_responds_to_request() {
         let handle = thread::spawn(|| {
             Server::new(ADDRESS).listen_once();
         });
