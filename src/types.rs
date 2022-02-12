@@ -27,6 +27,7 @@ pub(crate) enum HttpParseError {
     InvalidMethod,
     InvalidPath,
     InvalidHttpVersion,
+    InvalidHeaderSyntax,
 
     Other(String),
 }
@@ -49,6 +50,10 @@ pub struct Request {
     pub path: String,
     pub query: Option<String>,
     pub fragment: Option<String>,
+
+    pub headers: Headers,
+
+    pub body: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -109,6 +114,7 @@ pub enum HttpStatusCode {
     Code511,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Headers(pub HashMap<String, String>);
 
 pub struct Response {

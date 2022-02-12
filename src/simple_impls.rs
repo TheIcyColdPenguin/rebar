@@ -3,6 +3,7 @@ use crate::types::{
     NormalizePath, Request,
 };
 
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
 impl Display for HttpVersion {
@@ -104,6 +105,10 @@ impl Default for Request {
             query: None,
             fragment: None,
             http_version: HttpVersion::Http1_1,
+
+            headers: Headers(HashMap::new()),
+
+            body: None,
         }
     }
 }
@@ -128,9 +133,9 @@ impl NormalizePath for String {
         }
 
         let mut iter = if self.contains('?') {
-            self.split('?')
+            self.splitn(2, '?')
         } else if self.contains('#') {
-            self.split('#')
+            self.splitn(2, '#')
         } else {
             return (fix_path(self), None, None);
         };
@@ -148,11 +153,12 @@ impl NormalizePath for String {
             None => None,
         };
 
-        let fragment = match self.split('#').skip(1).collect::<String>() {
-            s if s.trim() != "" => Some(s.trim().to_owned()),
+        let fragment = match self.splitn(2, '#').skip(1).next() {
+            Some(s) if s.trim() != "" => Some(s.trim().to_owned()),
             _ => None,
         };
 
+        
         (path, query, fragment)
     }
 }
