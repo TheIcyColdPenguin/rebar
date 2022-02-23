@@ -188,7 +188,8 @@ macro_rules! template_vars {
     {$($key:expr => $value:expr),* $(,)?} => {
         {
             {
-                let mut map = HashMap::new();
+
+                let mut map = std::collections::HashMap::new();
                 $(
                     map.insert($key.into(), $value.into());
                 )*
