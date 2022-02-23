@@ -81,7 +81,8 @@ where
 mod tests {
     use super::*;
 
-    use crate::types::Method;
+    use crate::template_vars;
+    use crate::types::{Method, Template};
 
     use http::header::{CONTENT_TYPE, SERVER};
 
@@ -91,10 +92,20 @@ mod tests {
     fn it_responds_to_request() {
         let handle = thread::spawn(|| {
             let mut server = Server::new(ADDRESS);
+            let template = Template::new("./static/index.html").unwrap();
 
-            server.on_all(|req, res| {
-                if req.method == Method::Get && req.path == "/" {
-                    res.body = "ok".into();
+            server.on_all(move |req, res| {
+                if req.method == Method::Get {
+                    match template.soak(template_vars! {
+                        "title" => "it works",
+                        "body" => ("this is ".to_owned() + &req.path)
+                    }) {
+                        Ok(soaked) => res.body = soaked.into(),
+                        Err(err) => {
+                            eprintln!("Something went wrong: {:?}", err);
+                            return Err(HttpStatusCode::Code500);
+                        }
+                    }
                     res.headers.set_header("Server", "Rebar");
 
                     Ok(())
@@ -113,7 +124,23 @@ mod tests {
         assert_eq!(headers[CONTENT_TYPE], "text/html; charset=utf-8");
         assert_eq!(headers[SERVER], "Rebar");
 
-        assert_eq!(response.text().unwrap(), "ok".to_owned());
+        assert_eq!(
+            response.text().unwrap(),
+            r#"<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>it works</title>
+    </head>
+    <body>
+        this is /
+    </body>
+</html>
+"#
+            .to_owned()
+        );
 
         handle.join().unwrap();
     }

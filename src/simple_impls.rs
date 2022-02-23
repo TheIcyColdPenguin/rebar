@@ -158,7 +158,6 @@ impl NormalizePath for String {
             _ => None,
         };
 
-        
         (path, query, fragment)
     }
 }
@@ -182,4 +181,19 @@ where
 
         self
     }
+}
+
+#[macro_export]
+macro_rules! template_vars {
+    {$($key:expr => $value:expr),* $(,)?} => {
+        {
+            {
+                let mut map = HashMap::new();
+                $(
+                    map.insert($key.into(), $value.into());
+                )*
+                map
+            }
+        }
+    };
 }

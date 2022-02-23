@@ -142,3 +142,14 @@ where
 pub(crate) trait NormalizePath {
     fn normalize(&self) -> (String, Option<String>, Option<String>);
 }
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum TemplateComponent {
+    TemplatePart(String),
+    InputPart(String),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Template {
+    pub(crate) template: Vec<TemplateComponent>,
+}
