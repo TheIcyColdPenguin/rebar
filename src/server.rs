@@ -117,7 +117,7 @@ mod tests {
             server.listen_once();
         });
 
-        let response = reqwest::blocking::get(format!("http://{}", ADDRESS)).unwrap();
+        let response = reqwest::blocking::get(format!("http://{}/interesting", ADDRESS)).unwrap();
         let headers = response.headers();
         assert!(headers.contains_key(CONTENT_TYPE));
         assert!(headers.contains_key(SERVER));
@@ -133,9 +133,15 @@ mod tests {
         <meta http-equiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>it works</title>
+        <style>
+            html,
+            body {
+                margin: 0;
+            }
+        </style>
     </head>
     <body>
-        this is /
+        this is /interesting/
     </body>
 </html>
 "#

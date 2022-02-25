@@ -39,7 +39,7 @@ impl Template {
 
     fn parse_template(content: String) -> Result<Vec<TemplateComponent>, String> {
         let mut components = Vec::new();
-        let mut chars = content.chars();
+        let mut chars = content.chars().peekable();
         let mut curr_token = String::new();
         let mut is_template_text = true;
         while let Some(chr) = chars.next() {
@@ -49,27 +49,51 @@ impl Template {
                         return Err("Cannot have a curly brace in variable name".into());
                     }
 
-                    if curr_token.ends_with('\\') {
-                        // escaped
-                        curr_token.pop();
-                        curr_token.push('{');
-                    } else {
-                        if curr_token.len() != 0 {
-                            components.push(TemplateComponent::TemplatePart(curr_token.clone()));
+                    match chars.peek() {
+                        Some('{') => {
+                            if curr_token.ends_with('\\') {
+                                // escaped
+                                curr_token.pop();
+                                curr_token.push('{');
+                            } else {
+                                if curr_token.len() != 0 {
+                                    components
+                                        .push(TemplateComponent::TemplatePart(curr_token.clone()));
+                                }
+                                curr_token.clear();
+                                chars.next();
+                                is_template_text = false;
+                            }
                         }
-                        curr_token.clear();
-                        is_template_text = false;
+                        Some(chr) => {
+                            curr_token.push('{');
+                            curr_token.push(*chr);
+                            chars.next();
+                        }
+
+                        None => curr_token.push('{'),
                     }
                 }
                 '}' => {
                     if is_template_text {
-                        curr_token.push(chr);
-                    } else if curr_token.len() == 0 {
-                        return Err("Cannot have empty variable name".into());
+                        curr_token.push('}');
                     } else {
-                        components.push(TemplateComponent::InputPart(curr_token.clone()));
-                        curr_token.clear();
-                        is_template_text = true;
+                        match chars.next() {
+                            Some('}') => {
+                                if curr_token.len() == 0 {
+                                    return Err("Cannot have empty variable name".into());
+                                } else {
+                                    components
+                                        .push(TemplateComponent::InputPart(curr_token.clone()));
+                                    curr_token.clear();
+                                    is_template_text = true;
+                                }
+                            }
+                            Some(_) => {
+                                return Err("Cannot have a curly brace in variable name".into())
+                            }
+                            None => return Err("Unexpected end of input".into()),
+                        }
                     }
                 }
                 x if x.is_alphabetic() || x == '_' => {
@@ -124,7 +148,7 @@ mod tests {
     #[test]
     fn it_parses_template() {
         assert_eq!(
-            Template::create_from_string("Hello there, { name }! This is a working template!"),
+            Template::create_from_string("Hello there, {{ name }}! This is a working template!"),
             Ok(Template {
                 template: vec![
                     TemplateComponent::TemplatePart("Hello there, ".into()),
@@ -142,7 +166,9 @@ mod tests {
             })
         );
         assert_eq!(
-            Template::create_from_string("Hello there, { name }! I can have {n} more variables!"),
+            Template::create_from_string(
+                "Hello there, {{ name }}! I can have {{n}} more variables!"
+            ),
             Ok(Template {
                 template: vec![
                     TemplateComponent::TemplatePart("Hello there, ".into()),
@@ -154,13 +180,13 @@ mod tests {
             })
         );
         assert_eq!(
-            Template::create_from_string("{_}"),
+            Template::create_from_string("{{_}}"),
             Ok(Template {
                 template: vec![TemplateComponent::InputPart("_".into()),]
             })
         );
         assert_eq!(
-            Template::create_from_string("double open bracket but it's escaped \\{{_}"),
+            Template::create_from_string("double open bracket but it's escaped \\{{{_}}"),
             Ok(Template {
                 template: vec![
                     TemplateComponent::TemplatePart(
@@ -170,19 +196,67 @@ mod tests {
                 ]
             })
         );
+        assert_eq!(
+            Template::create_from_string("Hello there, { name }! This is a working template!"),
+            Ok(Template {
+                template: vec![TemplateComponent::TemplatePart(
+                    "Hello there, { name }! This is a working template!".into()
+                ),]
+            })
+        );
+        assert_eq!(
+            Template::create_from_string("Hello there, {{ name }}! I can have {n} more variables!"),
+            Ok(Template {
+                template: vec![
+                    TemplateComponent::TemplatePart("Hello there, ".into()),
+                    TemplateComponent::InputPart("name".into()),
+                    TemplateComponent::TemplatePart("! I can have {n} more variables!".into()),
+                ]
+            })
+        );
+        assert_eq!(
+            Template::create_from_string("{_}"),
+            Ok(Template {
+                template: vec![TemplateComponent::TemplatePart("{_}".into()),]
+            })
+        );
+        assert_eq!(
+            Template::create_from_string("more escaping  \\{{_}}"),
+            Ok(Template {
+                template: vec![TemplateComponent::TemplatePart(
+                    "more escaping  {{_}}".into()
+                )]
+            })
+        );
+        assert_eq!(
+            Template::create_from_string("Hello there, {{ name}}}! This is a working template!"),
+            Ok(Template {
+                template: vec![
+                    TemplateComponent::TemplatePart("Hello there, ".into()),
+                    TemplateComponent::InputPart("name".into()),
+                    TemplateComponent::TemplatePart("}! This is a working template!".into()),
+                ]
+            })
+        );
     }
     #[test]
     fn it_fails_templating() {
         assert_eq!(
-            Template::create_from_string("Hello there, {{ name }! This is a working template!"),
+            Template::create_from_string("Hello there, {{{ name }}! This is a working template!"),
             Err("Cannot have a curly brace in variable name".into())
         );
         assert_eq!(
-            Template::create_from_string("Hello there, { }! This is a working template!"),
+            Template::create_from_string(
+                "Hello there, {{ name}}}! This is a working template! {{ another_var }"
+            ),
+            Err("Unexpected end of input".into())
+        );
+        assert_eq!(
+            Template::create_from_string("Hello there, {{ }}! This is a working template!"),
             Err("Cannot have empty variable name".into())
         );
         assert_eq!(
-            Template::create_from_string("Hello there, { -}! This is a working template!"),
+            Template::create_from_string("Hello there, {{ -}}! This is a working template!"),
             Err("unexpected char '-'".into())
         );
     }
@@ -190,7 +264,7 @@ mod tests {
     #[test]
     fn it_soaks_template() {
         let template =
-            Template::create_from_string("Hello there, { name }! This is a working template!")
+            Template::create_from_string("Hello there, {{ name }}! This is a working template!")
                 .unwrap();
 
         assert_eq!(
@@ -201,7 +275,7 @@ mod tests {
     #[test]
     fn it_fails_soaking() {
         let template =
-            Template::create_from_string("Hello there, { name }! This is a working template!")
+            Template::create_from_string("Hello there, {{ name }}! This is a working template!")
                 .unwrap();
 
         assert_eq!(
