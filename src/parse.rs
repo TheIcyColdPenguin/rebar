@@ -26,7 +26,7 @@ fn internal_parse(req: String) -> Result<Request, HttpParseError> {
     };
 
     let body: Option<String> = match block_iter.next() {
-        Some(x) if x.trim() != "" => Some(x.trim().to_owned()),
+        Some(x) if x.trim() != "" => Some(x.trim().trim_end_matches(char::from(0)).to_owned()),
         _ => None,
     };
 
