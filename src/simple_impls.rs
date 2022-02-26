@@ -1,9 +1,10 @@
 use crate::types::{
-    HeaderMethods, Headers, HttpResponseError, HttpStatusCode, HttpVersion, LogError, Method,
-    NormalizePath, Request,
+    HeaderMethods, Headers, HttpParseError, HttpResponseError, HttpStatusCode, HttpVersion,
+    LogError, Method, NormalizePath, RebarError, Request, TemplateError,
 };
 
 use std::collections::HashMap;
+use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
 impl Display for HttpVersion {
@@ -14,6 +15,60 @@ impl Display for HttpVersion {
             match self {
                 HttpVersion::Http1_1 => "HTTP/1.1",
                 HttpVersion::Http2_0 => "HTTP/2.0",
+            }
+        )
+    }
+}
+
+impl Error for RebarError {}
+impl Error for HttpParseError {}
+impl Error for TemplateError {}
+
+impl Display for RebarError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(
+            f,
+            "{}",
+            match self {
+                RebarError::ParseError(parse_err) => parse_err.to_string(),
+                RebarError::TemplateError(template_err) => template_err.to_string(),
+            }
+        )
+    }
+}
+
+impl Display for TemplateError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::NonexistentPath(p) =>
+                    format!("Path {:?} either doesnt exist or is a directory", p),
+                Self::ReadErr(err) => err.to_string(),
+
+                Self::InvalidChar(c) => format!("Unexpected char '{}'", c),
+                Self::EmptyVariableName => "Cannot have empty variable name".to_string(),
+                Self::UnexpectedEof => "Unexpected end of input".to_string(),
+                Self::UnterminatedBraces => "Unterminated '{{'".to_string(),
+
+                Self::MissingVariable(varname) => format!("Missing variable `{}`", varname),
+            }
+        )
+    }
+}
+
+impl Display for HttpParseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::InvalidMethod => "Invalid method",
+                Self::InvalidPath => "Invalid path",
+                Self::InvalidHttpVersion => "Invalid http version",
+                Self::InvalidHeaderSyntax => "Invalid header syntax",
+                Self::Other(err) => err,
             }
         )
     }

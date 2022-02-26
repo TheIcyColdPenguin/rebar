@@ -1,26 +1,28 @@
-use crate::types::{Template, TemplateComponent};
+use crate::types::{
+    RebarError::TemplateError, Result, Template, TemplateComponent, TemplateError::*,
+};
 
 use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::path::PathBuf;
 
 impl Template {
-    pub fn new<P>(path: P) -> Result<Template, String>
+    pub fn new<P>(path: P) -> Result<Template>
     where
         P: Into<PathBuf>,
     {
         Self::get_template(path)
     }
 
-    fn get_template<P>(path: P) -> Result<Template, String>
+    fn get_template<P>(path: P) -> Result<Template>
     where
         P: Into<PathBuf>,
     {
         let path = PathBuf::from(path.into());
         let template_file = if path.exists() && path.is_file() {
-            read_to_string(path).map_err(|e| e.to_string())?
+            read_to_string(path).map_err(|e| TemplateError(ReadErr(e.to_string())))?
         } else {
-            return Err("Path either doesnt exist or is a directory".into());
+            return Err(TemplateError(NonexistentPath(path)));
         };
 
         Ok(Template {
@@ -28,7 +30,7 @@ impl Template {
         })
     }
 
-    pub fn create_from_string<S>(content: S) -> Result<Template, String>
+    pub fn create_from_string<S>(content: S) -> Result<Template>
     where
         S: Into<String>,
     {
@@ -37,7 +39,7 @@ impl Template {
         })
     }
 
-    fn parse_template(content: String) -> Result<Vec<TemplateComponent>, String> {
+    fn parse_template(content: String) -> Result<Vec<TemplateComponent>> {
         let mut components = Vec::new();
         let mut chars = content.chars().peekable();
         let mut curr_token = String::new();
@@ -46,7 +48,7 @@ impl Template {
             match chr {
                 '{' => {
                     if !is_template_text {
-                        return Err("Cannot have a curly brace in variable name".into());
+                        return Err(TemplateError(InvalidChar('{')));
                     }
 
                     match chars.peek() {
@@ -81,7 +83,7 @@ impl Template {
                         match chars.next() {
                             Some('}') => {
                                 if curr_token.len() == 0 {
-                                    return Err("Cannot have empty variable name".into());
+                                    return Err(TemplateError(EmptyVariableName));
                                 } else {
                                     components
                                         .push(TemplateComponent::InputPart(curr_token.clone()));
@@ -89,10 +91,8 @@ impl Template {
                                     is_template_text = true;
                                 }
                             }
-                            Some(_) => {
-                                return Err("Cannot have a curly brace in variable name".into())
-                            }
-                            None => return Err("Unexpected end of input".into()),
+                            Some(_) => return Err(TemplateError(InvalidChar('{'))),
+                            None => return Err(TemplateError(UnexpectedEof)),
                         }
                     }
                 }
@@ -105,7 +105,7 @@ impl Template {
                         curr_token.push(chr);
                     } else {
                         if !chr.is_whitespace() {
-                            return Err(format!("unexpected char '{}'", chr));
+                            return Err(TemplateError(InvalidChar(chr)));
                         }
                     }
                 }
@@ -117,20 +117,20 @@ impl Template {
                 components.push(TemplateComponent::TemplatePart(curr_token));
             }
         } else {
-            return Err("Unterminated '{'".into());
+            return Err(TemplateError(UnterminatedBraces));
         }
 
         Ok(components)
     }
 
-    pub fn soak(&self, vars: HashMap<String, String>) -> Result<String, String> {
+    pub fn soak(&self, vars: HashMap<String, String>) -> Result<String> {
         let mut soaked_template = String::new();
         for component in self.template.iter() {
             soaked_template.push_str(&match component {
                 TemplateComponent::TemplatePart(string) => string.to_owned(),
                 TemplateComponent::InputPart(varname) => match vars.get(varname) {
                     Some(value) => Template::sanitize(value),
-                    None => return Err(format!("Missing variable `{varname}`")),
+                    None => return Err(TemplateError(MissingVariable(varname.to_string()))),
                 },
             });
         }
@@ -254,21 +254,25 @@ mod tests {
     fn it_fails_templating() {
         assert_eq!(
             Template::create_from_string("Hello there, {{{ name }}! This is a working template!"),
-            Err("Cannot have a curly brace in variable name".into())
+            Err(TemplateError(InvalidChar('{')))
         );
         assert_eq!(
             Template::create_from_string(
                 "Hello there, {{ name}}}! This is a working template! {{ another_var }"
             ),
-            Err("Unexpected end of input".into())
+            Err(TemplateError(UnexpectedEof))
         );
         assert_eq!(
             Template::create_from_string("Hello there, {{ }}! This is a working template!"),
-            Err("Cannot have empty variable name".into())
+            Err(TemplateError(EmptyVariableName))
         );
         assert_eq!(
             Template::create_from_string("Hello there, {{ -}}! This is a working template!"),
-            Err("unexpected char '-'".into())
+            Err(TemplateError(InvalidChar('-')))
+        );
+        assert_eq!(
+            Template::create_from_string("Hello there, {{ unclosed"),
+            Err(TemplateError(UnterminatedBraces))
         );
     }
 
@@ -291,7 +295,7 @@ mod tests {
 
         assert_eq!(
             template.soak(template_vars! {"nam" => "Template Monster"}),
-            Err("Missing variable `name`".into())
+            Err(TemplateError(MissingVariable("name".to_string())))
         );
     }
 }

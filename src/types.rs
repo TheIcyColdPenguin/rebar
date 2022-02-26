@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::marker::Send;
 use std::net::{TcpListener, TcpStream};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 pub struct Server<F>
 where
-    F: Fn(&Request, &mut Response) -> Result<(), HttpStatusCode> + Send + 'static,
+    F: Fn(&Request, &mut Response) -> HttpStatusCode + Send + 'static,
 {
     pub(crate) listener: TcpListener,
     pub(crate) handler: Arc<Mutex<Option<F>>>,
@@ -22,8 +23,16 @@ pub enum Method {
     Patch,
 }
 
+pub type Result<T> = std::result::Result<T, RebarError>;
+
 #[derive(Debug, PartialEq)]
-pub(crate) enum HttpParseError {
+pub enum RebarError {
+    ParseError(HttpParseError),
+    TemplateError(TemplateError),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum HttpParseError {
     InvalidMethod,
     InvalidPath,
     InvalidHttpVersion,
@@ -35,6 +44,19 @@ pub(crate) enum HttpParseError {
 #[derive(Debug, PartialEq)]
 pub enum HttpResponseError {
     Other(String),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum TemplateError {
+    NonexistentPath(PathBuf),
+    ReadErr(String),
+
+    InvalidChar(char),
+    EmptyVariableName,
+    UnexpectedEof,
+    UnterminatedBraces,
+
+    MissingVariable(String),
 }
 
 #[derive(Debug, PartialEq, Clone)]

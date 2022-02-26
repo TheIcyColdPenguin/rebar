@@ -23,7 +23,7 @@ fn create_response(stream: TcpStream, req: &Request) -> Response {
 
 impl<F> Server<F>
 where
-    F: Fn(&Request, &mut Response) -> Result<(), HttpStatusCode> + Send,
+    F: Fn(&Request, &mut Response) -> HttpStatusCode + Send + 'static,
 {
     pub fn new(on: &str) -> Server<F> {
         Server {
@@ -44,10 +44,7 @@ where
 
                 let handler = handler.lock().unwrap();
                 if let Some(handler) = handler.as_ref() {
-                    match handler(&req, &mut res) {
-                        Ok(_) => {}
-                        Err(code) => res.status = code,
-                    }
+                    res.status = handler(&req, &mut res);
                 }
 
                 res.send().log_error();
@@ -85,6 +82,7 @@ mod tests {
     use crate::types::{Method, Template};
 
     use http::header::{CONTENT_TYPE, SERVER};
+    use http::StatusCode;
 
     const ADDRESS: &str = "localhost:3004";
 
@@ -94,8 +92,8 @@ mod tests {
             let mut server = Server::new(ADDRESS);
             let template = Template::new("./static/index.html").unwrap();
 
-            server.on_all(move |req, res| {
-                if req.method == Method::Get {
+            server.on_all(move |req, res| match (&req.method, req.path.as_str()) {
+                (Method::Get, "/interesting/") => {
                     match template.soak(template_vars! {
                         "title" => "it works",
                         "body" => ("this is cool && ".to_owned() + &req.path)
@@ -103,17 +101,19 @@ mod tests {
                         Ok(soaked) => res.body = soaked.into(),
                         Err(err) => {
                             eprintln!("Something went wrong: {:?}", err);
-                            return Err(HttpStatusCode::Code500);
+                            return HttpStatusCode::Code500;
                         }
                     }
                     res.headers.set_header("Server", "Rebar");
 
-                    Ok(())
-                } else {
-                    Err(HttpStatusCode::Code400)
+                    HttpStatusCode::Code200
                 }
+                (_, "/interesting/") => HttpStatusCode::Code405,
+                _ => HttpStatusCode::Code404,
             });
 
+            server.listen_once();
+            server.listen_once();
             server.listen_once();
         });
 
@@ -147,6 +147,15 @@ mod tests {
 "#
             .to_owned()
         );
+
+        let client = reqwest::blocking::Client::new();
+        let response = client
+            .post(format!("http://{}/interesting", ADDRESS))
+            .send()
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+        let response = reqwest::blocking::get(format!("http://{}/hmm", ADDRESS)).unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
         handle.join().unwrap();
     }
