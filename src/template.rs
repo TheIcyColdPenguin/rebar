@@ -126,16 +126,27 @@ impl Template {
     pub fn soak(&self, vars: HashMap<String, String>) -> Result<String, String> {
         let mut soaked_template = String::new();
         for component in self.template.iter() {
-            soaked_template.push_str(match component {
-                TemplateComponent::TemplatePart(string) => string,
+            soaked_template.push_str(&match component {
+                TemplateComponent::TemplatePart(string) => string.to_owned(),
                 TemplateComponent::InputPart(varname) => match vars.get(varname) {
-                    Some(value) => value,
+                    Some(value) => Template::sanitize(value),
                     None => return Err(format!("Missing variable `{varname}`")),
                 },
             });
         }
 
         Ok(soaked_template)
+    }
+
+    pub fn sanitize(input: &str) -> String {
+        input
+            .replace('&', "&amp;")
+            .replace('>', "&gt;")
+            .replace('<', "&lt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&#39;")
+            .replace('(', "&#40;")
+            .replace(')', "&#41;")
     }
 }
 

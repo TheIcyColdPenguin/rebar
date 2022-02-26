@@ -98,7 +98,7 @@ mod tests {
                 if req.method == Method::Get {
                     match template.soak(template_vars! {
                         "title" => "it works",
-                        "body" => ("this is ".to_owned() + &req.path)
+                        "body" => ("this is cool && ".to_owned() + &req.path)
                     }) {
                         Ok(soaked) => res.body = soaked.into(),
                         Err(err) => {
@@ -141,7 +141,7 @@ mod tests {
         </style>
     </head>
     <body>
-        this is /interesting/
+        this is cool &amp;&amp; /interesting/
     </body>
 </html>
 "#
