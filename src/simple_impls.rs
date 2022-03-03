@@ -157,7 +157,7 @@ impl Default for Request {
         Request {
             method: Method::Get,
             path: "/".into(),
-            query: None,
+            query: HashMap::new(),
             fragment: None,
             http_version: HttpVersion::Http1_1,
 

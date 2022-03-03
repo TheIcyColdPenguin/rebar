@@ -70,7 +70,7 @@ pub struct Request {
     pub method: Method,
     pub http_version: HttpVersion,
     pub path: String,
-    pub query: Option<String>,
+    pub query: HashMap<String, String>,
     pub fragment: Option<String>,
 
     pub headers: Headers,

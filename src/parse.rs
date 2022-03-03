@@ -41,6 +41,8 @@ fn internal_parse(req: String) -> Result<Request, HttpParseError> {
     let (path, query, fragment) = get_path(strings.next())?;
     let http_version = get_http_version(strings.next())?;
 
+    let query = parse_query(query);
+
     let mut headers = Headers(HashMap::new());
 
     while let Some(header_line) = head_iter.next() {
@@ -80,6 +82,27 @@ fn get_http_version(version: Option<&str>) -> Result<HttpVersion, HttpParseError
         Some("HTTP/2.0") => Ok(HttpVersion::Http2_0),
         _ => Err(HttpParseError::InvalidHttpVersion),
     }
+}
+
+fn parse_query(query_str: Option<String>) -> HashMap<String, String> {
+    let mut query = HashMap::new();
+
+    if let Some(query_str) = query_str {
+        let params = query_str.split('&');
+        for param in params {
+            let mut param_iter = param.split('=');
+            if let Some(param_name) = param_iter.next() {
+                let param_name = param_name.trim();
+                if param_name.len() == 0 {
+                    continue;
+                }
+                let param_value = param_iter.next().or_else(|| Some("")).unwrap();
+                query.entry(param_name.into()).or_insert(param_value.into());
+            }
+        }
+    }
+
+    query
 }
 
 fn get_path(req: Option<&str>) -> Result<(String, Option<String>, Option<String>), HttpParseError> {
@@ -195,7 +218,7 @@ mod tests {
             Ok(Request {
                 method: Method::Get,
                 path: "/path/".to_owned(),
-                query: None,
+                query: HashMap::new(),
                 fragment: None,
                 http_version: HttpVersion::Http1_1,
 
@@ -210,7 +233,95 @@ mod tests {
             Ok(Request {
                 method: Method::Get,
                 path: "/path/".to_owned(),
-                query: Some("ok=1".to_owned()),
+                query: crate::template_vars! {"ok"=>"1"},
+                fragment: None,
+                http_version: HttpVersion::Http1_1,
+
+                headers: Headers(HashMap::new()),
+
+                body: None,
+            })
+        );
+
+        assert_eq!(
+            internal_parse("GET /path?ok= HTTP/1.1".to_owned()),
+            Ok(Request {
+                method: Method::Get,
+                path: "/path/".to_owned(),
+                query: crate::template_vars! {"ok"=>""},
+                fragment: None,
+                http_version: HttpVersion::Http1_1,
+                headers: Headers(HashMap::new()),
+                body: None,
+            })
+        );
+
+        assert_eq!(
+            internal_parse("GET /path?ok=&hmm=see HTTP/1.1".to_owned()),
+            Ok(Request {
+                method: Method::Get,
+                path: "/path/".to_owned(),
+                query: crate::template_vars! {"ok"=>"", "hmm"=>"see"},
+                fragment: None,
+                http_version: HttpVersion::Http1_1,
+
+                headers: Headers(HashMap::new()),
+
+                body: None,
+            })
+        );
+
+        assert_eq!(
+            internal_parse("GET /path?& HTTP/1.1".to_owned()),
+            Ok(Request {
+                method: Method::Get,
+                path: "/path/".to_owned(),
+                query: HashMap::new(),
+                fragment: None,
+                http_version: HttpVersion::Http1_1,
+
+                headers: Headers(HashMap::new()),
+
+                body: None,
+            })
+        );
+
+        assert_eq!(
+            internal_parse("GET /path? HTTP/1.1".to_owned()),
+            Ok(Request {
+                method: Method::Get,
+                path: "/path/".to_owned(),
+                query: HashMap::new(),
+                fragment: None,
+                http_version: HttpVersion::Http1_1,
+
+                headers: Headers(HashMap::new()),
+
+                body: None,
+            })
+        );
+
+        assert_eq!(
+            internal_parse("GET /path?= HTTP/1.1".to_owned()),
+            Ok(Request {
+                method: Method::Get,
+                path: "/path/".to_owned(),
+                query: HashMap::new(),
+                fragment: None,
+                http_version: HttpVersion::Http1_1,
+
+                headers: Headers(HashMap::new()),
+
+                body: None,
+            })
+        );
+
+        assert_eq!(
+            internal_parse("GET /path?ok= HTTP/1.1".to_owned()),
+            Ok(Request {
+                method: Method::Get,
+                path: "/path/".to_owned(),
+                query: crate::template_vars! {"ok"=>""},
                 fragment: None,
                 http_version: HttpVersion::Http1_1,
 
@@ -236,7 +347,7 @@ mod tests {
             Ok(Request {
                 method: Method::Get,
                 path: "/path/".to_owned(),
-                query: Some("ok=1".to_owned()),
+                query: crate::template_vars!{"ok"=>"1"},
                 fragment: None,
                 http_version: HttpVersion::Http1_1,
 
@@ -259,7 +370,7 @@ mod tests {
             Ok(Request {
                 method: Method::Post,
                 path: "/path/".to_owned(),
-                query: Some("ok=1".to_owned()),
+                query: crate::template_vars!{"ok"=>"1"},
                 fragment: None,
                 http_version: HttpVersion::Http1_1,
 
