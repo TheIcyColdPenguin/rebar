@@ -23,7 +23,9 @@ fn create_response(stream: TcpStream, req: &Request) -> Response {
 
 impl<F> Server<F>
 where
-    F: Fn(&Request, &mut Response) -> HttpStatusCode + Send + 'static,
+    F: Fn(&Request, &mut Response) -> Result<HttpStatusCode, Box<dyn std::error::Error>>
+        + Send
+        + 'static,
 {
     pub fn new(on: &str) -> Server<F> {
         Server {
@@ -44,7 +46,11 @@ where
 
                 let handler = handler.lock().unwrap();
                 if let Some(handler) = handler.as_ref() {
-                    res.status = handler(&req, &mut res);
+                    if let Ok(status) = handler(&req, &mut res) {
+                        res.status = status;
+                    } else {
+                        res.status = HttpStatusCode::Code500;
+                    }
                 }
 
                 res.send().log_error();
@@ -101,15 +107,15 @@ mod tests {
                         Ok(soaked) => res.body = soaked.into(),
                         Err(err) => {
                             eprintln!("Something went wrong: {:?}", err);
-                            return HttpStatusCode::Code500;
+                            return Ok(HttpStatusCode::Code500);
                         }
                     }
                     res.headers.set_header("Server", "Rebar");
 
-                    HttpStatusCode::Code200
+                    Ok(HttpStatusCode::Code200)
                 }
-                (_, "/interesting/") => HttpStatusCode::Code405,
-                _ => HttpStatusCode::Code404,
+                (_, "/interesting/") => Ok(HttpStatusCode::Code405),
+                _ => Ok(HttpStatusCode::Code404),
             });
 
             server.listen_once();

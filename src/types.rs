@@ -6,7 +6,12 @@ use std::sync::{Arc, Mutex};
 
 pub struct Server<F>
 where
-    F: Fn(&Request, &mut Response) -> HttpStatusCode + Send + 'static,
+    F: Fn(
+            &Request,
+            &mut Response,
+        ) -> std::result::Result<HttpStatusCode, Box<dyn std::error::Error>>
+        + Send
+        + 'static,
 {
     pub(crate) listener: TcpListener,
     pub(crate) handler: Arc<Mutex<Option<F>>>,
