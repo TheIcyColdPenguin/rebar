@@ -137,6 +137,20 @@ impl Template {
 
         Ok(soaked_template)
     }
+    pub fn soak_raw(&self, vars: HashMap<String, String>) -> Result<String> {
+        let mut soaked_template = String::new();
+        for component in self.template.iter() {
+            soaked_template.push_str(&match component {
+                TemplateComponent::TemplatePart(string) => string.to_owned(),
+                TemplateComponent::InputPart(varname) => match vars.get(varname) {
+                    Some(value) => value.to_owned(),
+                    None => return Err(TemplateError(MissingVariable(varname.to_string()))),
+                },
+            });
+        }
+
+        Ok(soaked_template)
+    }
 
     pub fn sanitize(input: &str) -> String {
         input
@@ -285,6 +299,16 @@ mod tests {
         assert_eq!(
             template.soak(template_vars! {"name" => "Template Monster"}),
             Ok("Hello there, Template Monster! This is a working template!".into())
+        );
+
+        assert_eq!(
+            template.soak(template_vars! {"name" => "<Template Monster>"},),
+            Ok("Hello there, &lt;Template Monster&gt;! This is a working template!".into())
+        );
+
+        assert_eq!(
+            template.soak_raw(template_vars! {"name" => "<Template Monster>"},),
+            Ok("Hello there, <Template Monster>! This is a working template!".into())
         );
     }
     #[test]
