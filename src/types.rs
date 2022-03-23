@@ -180,3 +180,7 @@ pub(crate) enum TemplateComponent {
 pub struct Template {
     pub(crate) template: Vec<TemplateComponent>,
 }
+
+pub trait Component {
+    fn render(&self) -> String;
+}
